@@ -1,10 +1,3 @@
----
-title: "Routing across multiple Knative services - Go"
-linkTitle: "Routing services - Go"
-weight: 1
-type: "docs"
----
-
 This example shows how to map multiple Knative services to different paths under
 a single domain name using the Istio VirtualService concept. Istio is a
 general-purpose reverse proxy, therefore these directions can also be used to
@@ -57,7 +50,7 @@ cd $GOPATH/src/github.com/knative/docs
 
 2. Set your preferred container registry:
 
-If you use Google Container Registry (GCR), uou will need to enable the
+If you use Google Container Registry (GCR), you will need to enable the
 [GCR API](https://console.cloud.google.com/apis/library/containerregistry.googleapis.com)
 in your GCP project.
 
@@ -126,15 +119,7 @@ kubectl get Gateway --namespace knative-serving --output yaml
 - Check the corresponding Kubernetes service for the shared Gateway:
 
 ```
-# In Knative 0.2.x and prior versions, the `knative-ingressgateway` service was used instead of `istio-ingressgateway`.
-INGRESSGATEWAY=knative-ingressgateway
-
-# The use of `knative-ingressgateway` is deprecated in Knative v0.3.x.
-# Use `istio-ingressgateway` instead, since `knative-ingressgateway`
-# will be removed in Knative v0.4.
-if kubectl get configmap config-istio -n knative-serving &> /dev/null; then
-    INGRESSGATEWAY=istio-ingressgateway
-fi
+INGRESSGATEWAY=istio-ingressgateway
 
 kubectl get svc $INGRESSGATEWAY --namespace istio-system --output yaml
 ```
@@ -152,15 +137,7 @@ You should see 2 Knative services: `search-service` and `login-service`.
 1. Find the shared Gateway IP and export as an environment variable:
 
 ```shell
-# In Knative 0.2.x and prior versions, the `knative-ingressgateway` service was used instead of `istio-ingressgateway`.
-INGRESSGATEWAY=knative-ingressgateway
-
-# The use of `knative-ingressgateway` is deprecated in Knative v0.3.x.
-# Use `istio-ingressgateway` instead, since `knative-ingressgateway`
-# will be removed in Knative v0.4.
-if kubectl get configmap config-istio -n knative-serving &> /dev/null; then
-    INGRESSGATEWAY=istio-ingressgateway
-fi
+INGRESSGATEWAY=istio-ingressgateway
 
 export GATEWAY_IP=`kubectl get svc $INGRESSGATEWAY --namespace istio-system \
     --output jsonpath="{.status.loadBalancer.ingress[*]['ip']}"`
@@ -226,42 +203,42 @@ kubectl get VirtualService entry-route --output yaml
 
 3.  Send a request to the `Search` service and the `Login` service by using
     corresponding URIs. You should get the same results as directly accessing
-    these services. \_ Get the ingress IP:
+    these services. Get the ingress IP:
 
     ```shell
-    # In Knative 0.2.x and prior versions, the `knative-ingressgateway` service was used instead of `istio-ingressgateway`.
-    INGRESSGATEWAY=knative-ingressgateway
-
-    # The use of `knative-ingressgateway` is deprecated in Knative v0.3.x.
-    # Use `istio-ingressgateway` instead, since `knative-ingressgateway`
-    # will be removed in Knative v0.4.
-    if kubectl get configmap config-istio -n knative-serving &> /dev/null; then
-        INGRESSGATEWAY=istio-ingressgateway
-    fi
+    INGRESSGATEWAY=istio-ingressgateway
 
     export GATEWAY_IP=`kubectl get svc $INGRESSGATEWAY --namespace istio-system \
         --output jsonpath="{.status.loadBalancer.ingress[*]['ip']}"`
     ```
 
-        * Send a request to the Search service:
-        ```shell
-        curl http://${GATEWAY_IP}/search --header "Host: example.com"
-        ```
-        or
-        ```shell
-        curl http://${GATEWAY_IP}/search --header "Host: <YOUR_DOMAIN_NAME>"
-        ```
-        for the case using your own domain.
+* Send a request to the Search service:
 
-        * Send a request to the Login service:
-        ```shell
-        curl http://${GATEWAY_IP}/login --header "Host: example.com"
-        ```
-        or
-        ```shell
-        curl http://${GATEWAY_IP}/login --header "Host: <YOUR_DOMAIN_NAME>"
-        ```
-        for the case using your own domain.
+    ```shell
+    curl http://${GATEWAY_IP}/search --header "Host: example.com"
+    ```
+
+    or
+
+    ```shell
+    curl http://${GATEWAY_IP}/search --header "Host: <YOUR_DOMAIN_NAME>"
+    ```
+
+    for the case using your own domain.
+
+* Send a request to the Login service:
+
+    ```shell
+    curl http://${GATEWAY_IP}/login --header "Host: example.com"
+    ```
+
+    or
+
+    ```shell
+    curl http://${GATEWAY_IP}/login --header "Host: <YOUR_DOMAIN_NAME>"
+    ```
+
+    for the case using your own domain.
 
 ## How It Works
 
@@ -274,13 +251,14 @@ with updated host will be forwarded to `knative-ingress-gateway` Gateway again.
 The Gateway proxy checks the updated host, and forwards it to `Search` or
 `Login` service according to its host setting.
 
-![Object model](images/knative-routing-sample-flow.png)
+![Object model](./images/knative-routing-sample-flow.png)
 
 ## Clean Up
 
 To clean up the sample resources:
 
-```
+```shell
 kubectl delete --filename docs/serving/samples/knative-routing-go/sample.yaml
 kubectl delete --filename docs/serving/samples/knative-routing-go/routing.yaml
 ```
+

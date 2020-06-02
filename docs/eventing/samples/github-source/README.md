@@ -1,10 +1,3 @@
----
-title: "GitHub source"
-linkTitle: "GitHub source"
-weight: 30
-type: "docs"
----
-
 GitHub Source example shows how to wire GitHub events for consumption
 by a Knative Service.
 
@@ -26,6 +19,15 @@ You will need:
    instructions also install the default eventing sources, including
    the `GitHubSource` we'll use.
 
+### Install Github Event Source
+
+Github Event source lives in the [knative/eventing-contrib](https://github.com/knative/eventing-contrib).
+You can install it by running the following (this is currently the latest released version (0.11.2))
+
+```shell
+kubectl apply -f https://github.com/knative/eventing-contrib/releases/download/v0.11.2/github.yaml
+```
+
 ### Create a Knative Service
 
 To verify the `GitHubSource` is working, we will create a simple Knative
@@ -33,7 +35,7 @@ To verify the `GitHubSource` is working, we will create a simple Knative
 defines this basic service.
 
 ```yaml
-apiVersion: serving.knative.dev/v1alpha1
+apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: github-message-dumper
@@ -41,7 +43,7 @@ spec:
   template:
     spec:
       containers:
-      - image: gcr.io/knative-releases/github.com/knative/eventing-sources/cmd/event_display
+      - image: gcr.io/knative-releases/knative.dev/eventing-contrib/cmd/event_display
 ```
 
 Enter the following command to create the service from `service.yaml`:
@@ -107,7 +109,7 @@ field to the spec specifying your GitHub enterprise API endpoint, see
 [here](../../README.md#githubsource)
 
 ```yaml
-apiVersion: sources.eventing.knative.dev/v1alpha1
+apiVersion: sources.knative.dev/v1alpha1
 kind: GitHubSource
 metadata:
   name: githubsourcesample
@@ -124,9 +126,10 @@ spec:
       name: githubsecret
       key: secretToken
   sink:
-    apiVersion: serving.knative.dev/v1alpha1
-    kind: Service
-    name: github-event-display
+    ref:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      name: github-message-dumper
 ```
 
 Then, apply that yaml using `kubectl`:

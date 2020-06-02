@@ -20,7 +20,7 @@ route traffic percent to sum to 100:
 
 ```
 Error from server (InternalError): error when applying patch:
-{"metadata":{"annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{\"apiVersion\":\"serving.knative.dev/v1alpha1\",\"kind\":\"Route\",\"metadata\":{\"annotations\":{},\"name\":\"route-example\",\"namespace\":\"default\"},\"spec\":{\"traffic\":[{\"configurationName\":\"configuration-example\",\"percent\":50}]}}\n"}},"spec":{"traffic":[{"configurationName":"configuration-example","percent":50}]}}
+{"metadata":{"annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{\"apiVersion\":\"serving.knative.dev/v1\",\"kind\":\"Route\",\"metadata\":{\"annotations\":{},\"name\":\"route-example\",\"namespace\":\"default\"},\"spec\":{\"traffic\":[{\"configurationName\":\"configuration-example\",\"percent\":50}]}}\n"}},"spec":{"traffic":[{"configurationName":"configuration-example","percent":50}]}}
 to:
 &{0xc421d98240 0xc421e77490 default route-example STDIN 0xc421db0488 264682 false}
 for: "STDIN": Internal error occurred: admission webhook "webhook.knative.dev" denied the request: mutation failed: The route must have traffic percent sum equal to 100.
@@ -43,22 +43,21 @@ kubectl get route <route-name> --output yaml
 
 The `conditions` in `status` provide the reason if there is any failure. For
 details, see Knative
-[Error Conditions and Reporting](https://github.com/knative/serving/blob/master/docs/spec/errors.md)(currently
-some of them are not implemented yet).
+[Error Conditions and Reporting](https://github.com/knative/docs/blob/master/docs/serving/spec/knative-api-specification-1.0.md#error-signalling).
 
-### Check ClusterIngress/Istio routing
+### Check Ingress/Istio routing
 
-Run the following command to list all the cluster ingress, with their labels
+To list all Ingress resources and their corresponding labels, run the following command:
 
 ```shell
-kubectl get clusteringress -o=custom-columns='NAME:.metadata.name,LABELS:.metadata.labels'
-NAME                   LABELS
-helloworld-go-h5kd4    map[serving.knative.dev/route:helloworld-go serving.knative.dev/routeNamespace:default]
+kubectl get ingresses.networking.internal.knative.dev -o=custom-columns='NAME:.metadata.name,LABELS:.metadata.labels'
+NAME            LABELS
+helloworld-go   map[serving.knative.dev/route:helloworld-go serving.knative.dev/routeNamespace:default serving.knative.dev/service:helloworld-go]
 ```
 
 The labels `serving.knative.dev/route` and `serving.knative.dev/routeNamespace`
-will tell exactly which Route a ClusterIngress is a child resource of. Find the
-one corresponding to your Route. If a ClusterIngress does not exist, the route
+indicate the Route in which the Ingress resource resides. Your Route and
+Ingress should be listed. If your Ingress does not exist, the route
 controller believes that the Revisions targeted by your Route/Service isn't
 ready. Please proceed to later sections to diagnose Revision readiness status.
 
@@ -66,23 +65,23 @@ Otherwise, run the following command to look at the ClusterIngress created for
 your Route
 
 ```
-kubectl get clusteringress <CLUSTERINGRESS_NAME> --output yaml
+kubectl get ingresses.networking.internal.knative.dev <INGRESS_NAME> --output yaml
 ```
 
-particularly, look at the `status:` section. If the ClusterIngress is working
+particularly, look at the `status:` section. If the Ingress is working
 correctly, we should see the condition with `type=Ready` to have `status=True`.
 Otherwise, there will be error messages.
 
-Now, if ClusterIngress shows status Ready, there must be a corresponding
+Now, if Ingress shows status `Ready`, there must be a corresponding
 VirtualService. Run the following command:
 
 ```shell
-kubectl get virtualservice <CLUSTERINGRESS_NAME> -n knative-serving --output yaml
+kubectl get virtualservice <INGRESS_NAME> -n <INGRESS_NAMESPACE> --output yaml
 ```
 
-the network configuration in VirtualService must match that of ClusterIngress
+the network configuration in VirtualService must match that of Ingress
 and Route. VirtualService currently doesn't expose a Status field, so if one
-exists and have matching configurations with ClusterIngress and Route, you may
+exists and have matching configurations with Ingress and Route, you may
 want to wait a little bit for those settings to propagate.
 
 If you are familar with Istio and `istioctl`, you may try using `istioctl` to
@@ -91,17 +90,13 @@ look deeper using Istio
 
 ### Check Ingress status
 
-Before Knative 0.3 we use a LoadBalancer service call `knative-ingressgateway`
-to handle ingress. Since Knative 0.3 we now use `istio-ingressgateway` Service.
+Knative uses a LoadBalancer service called `istio-ingressgateway` Service.
 
 To check the IP address of your Ingress, use
 
 ```shell
 kubectl get svc -n istio-system istio-ingressgateway
 ```
-
-Or replace that with `knative-ingressgateway` if you are using Knative release
-older than 0.3.
 
 If there is no external IP address, use
 
@@ -146,14 +141,10 @@ If you see this condition, check the following to continue debugging:
 - [Check application logs](#check-application-logs)
 - [Check Istio routing](#check-clusteringressistio-routing)
 
-If you see other conditions, to debug further:
-
-- Look up the meaning of the conditions in Knative
-  [Error Conditions and Reporting](https://github.com/knative/serving/blob/master/docs/spec/errors.md).
-  Note: some of them are not implemented yet. An alternative is to
-  [check Pod status](#check-pod-status).
-- If you are using `BUILD` to deploy and the `BuildComplete` condition is not
-  `True`, [check BUILD status](#check-build-status).
+If you see other conditions, look up the meaning of the conditions in Knative
+[Error Conditions and Reporting](https://github.com/knative/serving/blob/master/docs/spec/errors.md).
+Note: some of them are not implemented yet. An alternative is to
+[check Pod status](#check-pod-status).
 
 ## Check Pod status
 
@@ -181,31 +172,3 @@ kubectl get pod <pod-name> --output yaml
 
 If you see issues with "user-container" container in the containerStatuses,
 check your application logs as described below.
-
-## Check Build status
-
-If you are using Build to deploy, run the following command to get the Build for
-your `Revision`:
-
-```shell
-kubectl get build $(kubectl get revision <revision-name> --output jsonpath="{.spec.buildName}") --output yaml
-```
-
-If there is any failure, the `conditions` in `status` provide the reason. To
-access build logs, first execute `kubectl proxy` and then open
-[Kibana UI](http://localhost:8001/api/v1/namespaces/knative-monitoring/services/kibana-logging/proxy/app/kibana).
-Use any of the following filters within Kibana UI to see build logs. For more
-information about the Knative observability features, see
-[Installing logging, metrics, and traces](./Installing-logging-metrics-traces.md).
-
-- All build logs: `_exists_:"kubernetes.labels.build-name"`
-- Build logs for a specific build: `kubernetes.labels.build-name:"<BUILD NAME>"`
-- Build logs for a specific build and step:
-  `kubernetes.labels.build-name:"<BUILD NAME>" AND kubernetes.container_name:"build-step-<BUILD STEP NAME>"`
-
----
-
-Except as otherwise noted, the content of this page is licensed under the
-[Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/),
-and code samples are licensed under the
-[Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0).

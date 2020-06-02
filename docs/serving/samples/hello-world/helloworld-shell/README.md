@@ -1,10 +1,3 @@
----
-title: "Hello World - Shell"
-linkTitle: "Shell"
-weight: 1
-type: "docs"
----
-
 A simple web app that executes a shell script. The shell script reads an env
 variable `TARGET` and prints `Hello ${TARGET}!`. If the `TARGET` environment
 variable is not specified, the script uses `World`.
@@ -14,13 +7,13 @@ cluster. You can also download a working copy of the sample, by running the
 following commands:
 
 ```shell
-git clone -b "release-0.7" https://github.com/knative/docs knative-docs
+git clone -b "{{< branch >}}" https://github.com/knative/docs knative-docs
 cd knative-docs/docs/serving/samples/hello-world/helloworld-shell
 ```
 
 ## Before you begin
 
-- A Kubernetes cluster with Knative installed. Follow the
+- A Kubernetes cluster with Knative installed and DNS configured. Follow the
   [installation instructions](../../../../install/README.md) if you need to
   create one.
 - [Docker](https://www.docker.com) installed and running on your local machine,
@@ -42,48 +35,75 @@ cd knative-docs/docs/serving/samples/hello-world/helloworld-shell
    package main
 
    import (
-      "fmt"
-      "log"
-      "net/http"
-      "os"
-      "os/exec"
+     "fmt"
+     "log"
+     "net/http"
+     "os"
+     "os/exec"
    )
 
    func handler(w http.ResponseWriter, r *http.Request) {
-      cmd := exec.CommandContext(r.Context(), "/bin/sh", "script.sh")
-      cmd.Stderr = os.Stderr
-      out, err := cmd.Output()
-      if err != nil {
-          w.WriteHeader(500)
-      }
-      w.Write(out)
+     log.Print("helloworld: received a request")
+
+     cmd := exec.CommandContext(r.Context(), "/bin/sh", "script.sh")
+     cmd.Stderr = os.Stderr
+     out, err := cmd.Output()
+     if err != nil {
+       w.WriteHeader(500)
+     }
+     w.Write(out)
    }
 
    func main() {
-      http.HandleFunc("/", handler)
+     log.Print("helloworld: starting server...")
 
-      port := os.Getenv("PORT")
-      if port == "" {
-          port = "8080"
-      }
+     http.HandleFunc("/", handler)
 
-      log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
+     port := os.Getenv("PORT")
+     if port == "" {
+       port = "8080"
+     }
+
+     log.Printf("helloworld: listening on %s", port)
+     log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
    }
    ```
 
 1. Create a new file named `Dockerfile` and copy the code block below into it.
 
    ```docker
-   FROM golang:1.11
+   # Use the official Golang image to create a build artifact.
+   # This is based on Debian and sets the GOPATH to /go.
+   # https://hub.docker.com/_/golang
+   FROM golang:1.13 as builder
 
-   WORKDIR /go/src/invoke
+   # Create and change to the app directory.
+   WORKDIR /app
 
-   COPY invoke.go .
-   RUN go install -v
+   # Retrieve application dependencies using go modules.
+   # Allows container builds to reuse downloaded dependencies.
+   COPY go.* ./
+   RUN go mod download
 
-   COPY . .
+   # Copy local code to the container image.
+   COPY invoke.go ./
 
-   CMD ["invoke"]
+   # Build the binary.
+   # -mod=readonly ensures immutable go.mod and go.sum in container builds.
+   RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o server
+
+   # Use the official Alpine image for a lean production container.
+   # https://hub.docker.com/_/alpine
+   # https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
+   FROM alpine:3
+   RUN apk add --no-cache ca-certificates
+
+   # Copy the binary to the production image from the builder stage.
+   COPY --from=builder /app/server /server
+   COPY script.sh ./
+
+   # Run the web service on container startup.
+   CMD ["/server"]
    ```
 
 1. Create a new file, `service.yaml` and copy the following service definition
@@ -91,7 +111,7 @@ cd knative-docs/docs/serving/samples/hello-world/helloworld-shell
    username.
 
    ```yaml
-   apiVersion: serving.knative.dev/v1alpha1
+   apiVersion: serving.knative.dev/v1
    kind: Service
    metadata:
      name: helloworld-shell
@@ -104,6 +124,13 @@ cd knative-docs/docs/serving/samples/hello-world/helloworld-shell
              env:
                - name: TARGET
                  value: "Shell Sample v1"
+   ```
+
+1. Use the go tool to create a
+   [`go.mod`](https://github.com/golang/go/wiki/Modules#gomod) manifest.
+
+   ```shell
+   go mod init github.com/knative/docs/docs/serving/samples/hello-world/helloworld-shell
    ```
 
 ## Building and deploying the sample
@@ -139,23 +166,6 @@ folder) you're ready to build and deploy the sample app.
      for your app.
    - Automatically scale your pods up and down (including to zero active pods).
 
-1. Run the following command to find the external IP address for your service.
-   The ingress IP for your cluster is returned. If you just created your
-   cluster, you might need to wait and rerun the command until your service gets
-   asssigned an external IP address.
-
-   ```shell
-   kubectl get svc knative-ingressgateway --namespace istio-system
-   ```
-
-   Example:
-
-   ```shell
-   NAME                     TYPE           CLUSTER-IP     EXTERNAL-IP      PORT(S)                                      AGE
-   knative-ingressgateway   LoadBalancer   10.23.247.74   35.203.155.229   80:32380/TCP,443:32390/TCP,32400:32400/TCP   2d
-
-   ```
-
 1. Run the following command to find the domain URL for your service:
 
    ```shell
@@ -166,21 +176,20 @@ folder) you're ready to build and deploy the sample app.
 
    ```shell
    NAME                URL
-   helloworld-shell    http://helloworld-shell.default.example.com
+   helloworld-shell    http://helloworld-shell.default.1.2.3.4.xip.io
    ```
 
-1. Test your app by sending it a request. Use the following `curl` command with
-   the domain URL `helloworld-shell.default.example.com` and `EXTERNAL-IP`
-   address that you retrieved in the previous steps:
+1. Now you can make a request to your app and see the result. Replace
+   the URL below with the URL returned in the previous command.
 
    ```shell
-   curl -H "Host: helloworld-shell.default.example.com" http://{EXTERNAL_IP_ADDRESS}
+   curl http://helloworld-shell.default.1.2.3.4.xip.io
    ```
 
    Example:
 
    ```shell
-   curl -H "Host: helloworld-shell.default.example.com" http://35.203.155.229
+   curl http://helloworld-shell.default.1.2.3.4.xip.io
    Hello Shell Sample v1!
    ```
 
